@@ -1,103 +1,559 @@
-
 <head>
-  <title>Gradient Pinwheel</title>
-  <meta description="Gradient Pinwheel effect with smooth transitions between the colors instead of hard edges. Five Colors."/>
-  <meta publisher="Jose Miranda"/>
-  <meta property="rainbow" label="Rainbow" type="boolean" default="0"/>
-  <meta property="colorCount" label="Number Of Colors" type="number" min="2" max="5" default="4"/>
-  <meta property="color1" label="Color 1" type="color" min="0" max="360" default="#ff8000"/>
-  <meta property="color2" label="Color 2" type="color" min="0" max="360" default="#8000ff"/>
-  <meta property="color3" label="Color 3" type="color" min="0" max="360" default="#ff0080"/>
-  <meta property="color4" label="Color 4" type="color" min="0" max="360" default="#ffff00"/>
-  <meta property="color5" label="Color 5" type="color" min="0" max="360" default="#ffff00"/>
-  <meta property="pinwheelDensity" label="Pinwheel Density" type="number" min="1" max="10" default="1"/>
-  <meta property="speed" label="Speed" type="number" min="0" max="100" default="50"/>
-  <meta property="xPos" label="Center X Position" type="number" min="0" max="320" default="160"/>
-  <meta property="yPos" label="Center Y Position" type="number" min="0" max="200" default="100"/>
-  <meta property="reversed" label="Reverse Pinwheel" type="boolean" default="0"/>
+    <title>Solar System</title>
+    <meta description="Displays a series of circles rotating around a sun. Highly customizable!" />
+    <meta publisher="Jose Miranda" />
+    <!-- Sun Controls -->
+    <meta property="enableSun" label="Sun: Enable" type="boolean" default="true">
+    <meta property="sunRadius" label="Sun: Radius" type="number" min="5" max="100" default="20">
+    <meta property="sunColor" label="Sun: Color" type="color" default="#FFFF00">
+    <meta property="enableSunColorCycle" label="Sun: Enable Color Cycling" type="boolean" default="true">
+    <meta property="sunColorCycleSpeed" label="Sun: Color Cycle Speed" type="number" min="1" max="10" default="2">
+    <meta property="enableSunAnimation" label="Sun: Animate" type="boolean" default="true">
+    <!-- Flare Controls -->
+    <meta property="enableFlares" label="Sun: Flares: Enable Flares" type="boolean" default="true">
+    <meta property="flareCount" label="Sun: Flares Count" type="number" min="4" max="12" default="8">
+    <meta property="flareLength" label="Sun: Flares Length" type="number" min="10" max="50" default="30">
+    <meta property="flareSpeed" label="Sun: Flares Speed" type="number" min="0" max="10" default="4">
+    <meta property="flareGlow" label="Sun: Flares Glow Intensity" type="number" min="0" max="10" default="8">
+    <!-- Planet Controls -->
+    <meta property="enablePlanets" label="Planets: Enable" type="boolean" default="true">
+    <meta property="planetCount" label="Planets: Count" type="number" min="1" max="50" default="11">
+    <meta property="planetSizeMultiplier" label="Planets: Size Multiplier" type="number" min="1" max="100" default="6">
+    <meta property="speed" label="Planets: Speed" type="number" min="1" max="5" default="1">
+    <meta property="enableColorCycle" label="Planets: Enable Color Cycling" type="boolean" default="true">
+    <meta property="colorCycleSpeed" label="Planets: Color Cycle Speed" type="number" min="0" max="10" default="2">
+    <!-- Path Controls -->
+    <meta property="enablePath" label="Planets: Enable Paths" type="boolean" default="true">
+    <meta property="trailLength" label="Planets: Path Length" type="number" min="5" max="200" default="80">
+    <meta property="pathLineWidth" label="Planets: Path Width" type="number" min="1" max="10" default="3"> 
+    <meta property="usePlanetColors" label="Planets: Paths Use Planet Colors" type="boolean" default="true">
+    <meta property="pathColor" label="Planets: Path Color" type="color" default="#FFFFFF">
 </head>
 
-<body style="margin: 0; padding: 0">
-  <canvas id="canvas" width="320" height="200"></canvas>
+<style>
+  #myCanvas {
+    width: 100%;
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: rgb(0, 0, 0);
+  }
+</style>
+
+<body>
+  <canvas id="myCanvas" width="320" height="200"></canvas>
 </body>
 
 <script>
-  const canvas = document.getElementById("canvas");
-  const ctx = canvas.getContext("2d");
-  const canvasWidth = canvas.width;
-  const canvasHeight = canvas.height;
+const canvas = document.getElementById("myCanvas");
+const context = canvas.getContext("2d");
 
-  const DEGREES_IN_CIRCLE = 360;
-  const RADIAN_CONVERSION = Math.PI / 180;
-  
-  let rotation = 0;
-  let prevTime = performance.now();
+let planets = [];
+let planetCountCurrent = getPlanetCount();
+let currentSunRadius = getSunRadius();
+let sunHue = 60;
+let flarePhase = 0;
+let flareRotation = 0;
+const flares = Array(12).fill().map(() => Math.random() * Math.PI * 2);
 
-  function drawPinwheel() {
-    // No createConicGradient :(
-    for (let degree = 0; degree < DEGREES_IN_CIRCLE; degree++) {
-      const start = (degree + rotation) * RADIAN_CONVERSION;
-      const end = (degree + 3 + rotation) * RADIAN_CONVERSION;
+generatePlanets(planetCountCurrent); // Fix: Pass planetCountCurrent
+setSize();
+anim();
 
-      const color = getColorForIndex(degree);
-      ctx.fillStyle = color;
+// Returns the rotational speed multiplier for planets, normalized to 0.01–0.1 (default 0.02).
+function getSpeed() {
+  const value = (typeof speed !== "undefined" && !isNaN(speed)) ? speed / 200 : 2 / 200;
+  //console.log("Speed:", value);
+  return value;
+}
 
-      ctx.beginPath();
-      ctx.arc(xPos, yPos, 400, start, end);
-      ctx.lineTo(xPos, yPos);
-      ctx.closePath();
-      ctx.fill();
+// Returns the size multiplier for planets, clamped to 1–100, default 1.
+function getPlanetSizeMultiplier() {
+  const value = (typeof planetSizeMultiplier !== "undefined" && !isNaN(planetSizeMultiplier)) ? Math.max(1, Math.min(100, planetSizeMultiplier)) : 1;
+  //console.log("Planet Size Multiplier:", value);
+  return value;
+}
+
+// Returns the trail length for planet paths (number of history points), default 15.
+function getTrailLength() {
+  const value = Math.round(typeof trailLength !== "undefined" && !isNaN(trailLength)) ? trailLength : 15;
+  //console.log("Trail Length:", value);
+  return value;
+}
+
+// Returns the speed of path point addition, normalized to 0–1 (default 0.5).
+function getTrailSpeed() {
+  const value = (typeof trailSpeed !== "undefined" && !isNaN(trailSpeed)) ? trailSpeed / 10 : 5 / 100;
+  //console.log("Trail Speed:", value);
+  return value;
+}
+
+// Returns the number of planets to render, default 50.
+function getPlanetCount() {
+  const value = Math.round(typeof planetCount !== "undefined" && !isNaN(planetCount)) ? planetCount : 50;
+  //console.log("Planet Count:", value);
+  return value;
+}
+
+// Returns the speed of planet color cycling, normalized to 0–1 (default 0.2).
+function getColorCycleSpeed() {
+  const value = (typeof colorCycleSpeed !== "undefined" && !isNaN(colorCycleSpeed)) ? colorCycleSpeed / 10 : 2 / 10;
+  //console.log("Color Cycle Speed:", value);
+  return value;
+}
+
+// Returns whether planet color cycling is enabled, default true.
+function getEnableColorCycle() {
+  const value = typeof enableColorCycle !== "undefined" ? enableColorCycle : true;
+  //console.log("Enable Color Cycle:", value);
+  return value;
+}
+
+// Returns the width of planet paths, clamped to 0.5–10, default 2.
+function getPathWidth() {
+  const value = (typeof pathLineWidth !== "undefined" && !isNaN(pathLineWidth)) ? Math.max(0.5, Math.min(10, pathLineWidth)) : 2;
+  //console.log("Path Width:", value);
+  return value;
+}
+
+// Returns the color for planet paths (hex), default "#FF0000".
+function getPathColor() {
+  const value = (typeof pathColor !== "undefined" && pathColor && pathColor.match(/^#[0-9A-Fa-f]{6}$/)) ? pathColor : "#FF0000";
+  //console.log("Path Color:", value);
+  return value;
+}
+
+// Returns whether paths use planet colors, default false.
+function getUsePlanetColors() {
+  const value = typeof usePlanetColors !== "undefined" ? usePlanetColors : false;
+  //console.log("Use Planet Colors:", value);
+  return value;
+}
+
+// Returns whether the sun and flares are enabled, default true.
+function getEnableSun() {
+  const value = typeof enableSun !== "undefined" ? enableSun : true;
+  //console.log("Enable Sun:", value);
+  return value;
+}
+
+// Returns the sun's radius, clamped to 1–100, default 10.
+function getSunRadius() {
+  const value = (typeof sunRadius !== "undefined" && !isNaN(sunRadius)) ? Math.max(5, Math.min(100, sunRadius)) : 100;
+  //console.log("Sun Radius:", value);
+  return value;
+}
+
+// Returns the sun's color (hex), either cycled or static, default "#FFFF00".
+function getSunColor() {
+  if (getEnableSunColorCycle()) {
+    const color = hslToHex(sunHue, 100, 50);
+    //console.log("Sun Color (Cycling):", color);
+    return color;
+  }
+  const color = (typeof sunColor !== "undefined" && sunColor && sunColor.match(/^#[0-9A-Fa-f]{6}$/)) ? sunColor : "#FFFF00";
+  //console.log("Sun Color:", color);
+  return color;
+}
+
+// Returns whether sun color cycling is enabled, default false.
+function getEnableSunColorCycle() {
+  const value = typeof enableSunColorCycle !== "undefined" ? enableSunColorCycle : false;
+  //console.log("Enable Sun Color Cycle:", value);
+  return value;
+}
+
+// Returns the speed of sun color cycling, normalized to 0–1 (default 0.2).
+function getSunColorCycleSpeed() {
+  const value = (typeof sunColorCycleSpeed !== "undefined" && !isNaN(sunColorCycleSpeed)) ? sunColorCycleSpeed / 10 : 2 / 10;
+  //console.log("Sun Color Cycle Speed:", value);
+  return value;
+}
+
+// Returns whether flare animations (pulsing/rotation) are enabled, default true.
+function getEnableSunAnimation() {
+  const value = typeof enableSunAnimation !== "undefined" ? enableSunAnimation : true;
+  //console.log("Enable Sun Animation:", value);
+  return value;
+}
+
+// Returns whether flares are enabled, default true.
+function getEnableFlares() {
+  const value = typeof enableFlares !== "undefined" ? enableFlares : true;
+  //console.log("Enable Flares:", value);
+  return value;
+}
+
+// Returns the number of flares, clamped to 4–12, default 8.
+function getFlareCount() {
+  const value = Math.round(typeof flareCount !== "undefined" && !isNaN(flareCount)) ? Math.max(4, Math.min(12, flareCount)) : 8;
+  //console.log("Flare Count:", value);
+  return value;
+}
+
+// Returns the length of flares, clamped to 10–50, default 20.
+function getFlareLength() {
+  const value = (typeof flareLength !== "undefined" && !isNaN(flareLength)) ? Math.max(10, Math.min(50, flareLength)) : 20;
+  //console.log("Flare Length:", value);
+  return value;
+}
+
+// Returns the flare animation speed, normalized to 0–0.5 (default 0.1).
+function getFlareSpeed() {
+  const value = (typeof flareSpeed !== "undefined" && !isNaN(flareSpeed)) ? flareSpeed / 20 : 2 / 20;
+  //console.log("Flare Speed:", value);
+  return value;
+}
+
+// Returns the flare glow intensity, normalized to 0–1 (default 0.5).
+function getFlareGlow() {
+  const value = (typeof flareGlow !== "undefined" && !isNaN(flareGlow)) ? flareGlow / 10 : 0.5;
+  //console.log("Flare Glow:", value);
+  return value;
+}
+
+// Returns whether planet rendering is enabled, default true.
+function getEnablePlanets() {
+  const value = typeof enablePlanets !== "undefined" ? enablePlanets : true;
+  //console.log("Enable Planets:", value);
+  return value;
+}
+
+// Returns whether planet paths are enabled, default true.
+function getEnablePath() {
+  const value = typeof enablePath !== "undefined" ? enablePath : true;
+  //console.log("Enable Path:", value);
+  return value;
+}
+
+// Converts HSL color (hue, saturation, lightness) to hex color code.
+function hslToHex(h, s, l) {
+  try {
+    l /= 100;
+    const a = s * Math.min(l, 1 - l) / 100;
+    const f = n => {
+      const k = (n + h / 30) % 12;
+      const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+      return Math.round(255 * color).toString(16).padStart(2, '0');
+    };
+    const hex = `#${f(0)}${f(8)}${f(4)}`;
+    //console.log("hslToHex:", h, s, l, "->", hex);
+    return hex;
+  } catch (e) {
+    console.error("Error in hslToHex:", e);
+    return "#FFFF00";
+  }
+}
+
+// Converts hex color code to RGB object {r, g, b}.
+function hexToRgb(hex) {
+  try {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    //console.log("hexToRgb:", hex, "->", { r, g, b });
+    return { r, g, b };
+  } catch (e) {
+    console.error("Error in hexToRgb:", e);
+    return { r: 255, g: 255, b: 0 };
+  }
+}
+
+// Mixes two hex colors based on a ratio t (0–1), returns hex color.
+function mixColors(color1, color2, t) {
+  try {
+    if (!color1 || !color2 || !color1.match(/^#[0-9A-Fa-f]{6}$/) || !color2.match(/^#[0-9A-Fa-f]{6}$/)) {
+      console.warn("Invalid colors in mixColors:", color1, color2);
+      return color1 || "#FFFF00";
     }
+    const rgb1 = hexToRgb(color1);
+    const rgb2 = hexToRgb(color2);
+    const r = Math.round(rgb1.r * (1 - t) + rgb2.r * t);
+    const g = Math.round(rgb1.g * (1 - t) + rgb2.g * t);
+    const b = Math.round(rgb1.b * (1 - t) + rgb2.b * t);
+    const hex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+    //console.log("mixColors:", color1, color2, t, "->", hex);
+    return hex;
+  } catch (e) {
+    console.error("Error in mixColors:", e);
+    return color1 || "#FFFF00";
   }
+}
 
-  function getColorForIndex(degree) {
-    if (rainbow) {
-      return `hsl(${degree * pinwheelDensity}, 100%, 50%)`;
+// Sets the canvas size based on its container or fallback dimensions, regenerates planets if size changes.
+function setSize() {
+  try {
+    const width = canvas.clientWidth || window.innerWidth || 800;
+    const height = canvas.clientHeight || window.innerHeight || 600;
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+      //console.log("Canvas size set:", canvas.width, "x", canvas.height);
+      generatePlanets(planetCountCurrent);
+    }
+    const rect = canvas.getBoundingClientRect();
+    //console.log("Canvas position:", { top: rect.top, left: rect.left, width: rect.width, height: rect.height });
+  } catch (e) {
+    console.error("Error setting canvas size:", e);
+  }
+}
+
+// Generates the specified number of planets with random properties (position, hue, speed, size).
+function generatePlanets(amount) {
+  if (!Number.isFinite(amount) || amount < 0) {
+    console.warn("Invalid planet count:", amount, "using default 50");
+    amount = 50;
+  }
+  planets = [];
+  const trailLength = getTrailLength();
+  const pathWidth = getPathWidth();
+  try {
+    for (let i = 0; i < amount; i++) {
+      planets[i] = new Planet(
+        canvas.width / 2,
+        canvas.height / 2,
+        Math.random() * 1.5 + 0.5, // Random baseSize 0.5–2
+        Math.random() * 360,
+        Math.random() * 1 + 0.5,
+        trailLength,
+        pathWidth
+      );
+    }
+    //console.log("Generated", amount, "planets");
+  } catch (e) {
+    console.error("Error generating planets:", e);
+  }
+  planetCountCurrent = amount;
+}
+
+// Constructor for a planet object, defines properties and its rotate method for animation.
+function Planet(x, y, baseSize, hue, baseRotateSpeed, maxHistoryLength, pathWidth) {
+  this.baseSize = baseSize;
+  this.hue = hue;
+  this.theta = Math.random() * Math.PI * 2;
+  this.baseRotateSpeed = baseRotateSpeed;
+  const maxRadius = Math.min(canvas.width, canvas.height) / 2 - 10;
+  const minRadius = getSunRadius() + 20;
+  this.t = Math.random() * (maxRadius - minRadius) + minRadius;
+  this.t_max = maxRadius;
+  //console.log("Planet radius:", this.t, "minRadius:", minRadius, "maxRadius:", maxRadius);
+  this.circleRadius = this.baseSize * getPlanetSizeMultiplier();
+  //console.log("Planet circleRadius:", this.circleRadius);
+  this.positionHistory = [];
+  this.maxHistoryLength = maxHistoryLength;
+  this.pathWidth = pathWidth;
+  this.x = canvas.width / 2 + Math.cos(this.theta) * this.t;
+  this.y = canvas.height / 2 + Math.sin(this.theta) * this.t;
+
+  // Updates planet position, color, and draws its path and body.
+  this.rotate = () => {
+    try {
+      if (!context) {
+        console.error("Canvas context unavailable");
+        return;
+      }
+      if (getEnableColorCycle()) {
+        this.hue = (this.hue + getColorCycleSpeed()) % 360;
+      }
+
+      this.circleRadius = this.baseSize * getPlanetSizeMultiplier();
+      this.maxHistoryLength = getTrailLength();
+      this.pathWidth = getPathWidth();
+
+      const trailSpeed = getTrailSpeed();
+      this.frameCount = (this.frameCount || 0) + 1;
+      if (trailSpeed === 0 || this.frameCount >= Math.max(1, Math.round(10 * trailSpeed))) {
+        this.positionHistory.push({ x: this.x, y: this.y, hue: this.hue });
+        this.frameCount = 0;
+      }
+
+      while (this.positionHistory.length > this.maxHistoryLength) {
+        this.positionHistory.shift();
+      }
+      //console.log("Planet history length:", this.positionHistory.length, "max:", this.maxHistoryLength);
+
+      const distanceFactor = Math.min((this.t_max / this.t) ** 0.3, 1.5);
+      this.rotateSpeed = this.baseRotateSpeed * getSpeed() * distanceFactor;
+
+      this.theta += this.rotateSpeed;
+      this.x = canvas.width / 2 + Math.cos(this.theta) * this.t;
+      this.y = canvas.height / 2 + Math.sin(this.theta) * this.t;
+
+      context.save();
+      context.lineCap = "round";
+      context.lineJoin = "round";
+
+      if (getEnablePath() && this.positionHistory.length >= 2) {
+        for (let i = 0; i < this.positionHistory.length - 1; i++) {
+          if (isNaN(this.positionHistory[i].x) || isNaN(this.positionHistory[i].y)) {
+            console.warn("Invalid position at index", i, this.positionHistory[i]);
+            continue;
+          }
+          context.beginPath();
+          context.lineWidth = this.pathWidth;
+          context.strokeStyle = getUsePlanetColors() ? hslToHex(this.positionHistory[i].hue, 100, 50) : getPathColor();
+          context.globalAlpha = 0.5 * (i + 1) / this.positionHistory.length;
+          context.moveTo(this.positionHistory[i].x, this.positionHistory[i].y);
+          context.lineTo(this.positionHistory[i + 1].x, this.positionHistory[i + 1].y);
+          context.stroke();
+        }
+      }
+
+      context.beginPath();
+      context.fillStyle = hslToHex(this.hue, 100, 50);
+      context.globalAlpha = 0.5;
+      context.arc(this.x, this.y, this.circleRadius, 0, Math.PI * 2);
+      context.fill();
+
+      context.restore();
+    } catch (e) {
+      console.error("Error in planet rotate:", e);
+    }
+  };
+}
+
+// Main animation loop, updates and draws sun, flares, and planets each frame.
+function anim() {
+  try {
+    window.requestAnimationFrame(anim);
+    if (!context) {
+      console.error("Canvas context unavailable");
+      return;
+    }
+    context.fillStyle = "rgb(0, 0, 0)";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    //console.log("Anim: Starting animation frame");
+
+    setSize();
+
+    if (getEnableSunColorCycle()) {
+      sunHue = (sunHue + getSunColorCycleSpeed()) % 360;
+      //console.log("Sun Hue:", sunHue);
     }
 
-    const colors = [color1, color2, color3, color4, color5];
-    const interpolationSegmentSize = Math.round((DEGREES_IN_CIRCLE / colorCount) / pinwheelDensity);
-    const interpolationSegmentIndex = Math.floor(degree / interpolationSegmentSize);
-    const startColor = colors[interpolationSegmentIndex % colorCount];
-    const endColor = colors[(interpolationSegmentIndex + 1) % colorCount];
-    const interpolationVal = (degree % interpolationSegmentSize) / interpolationSegmentSize; // [0, 1)
+    if (getEnableSunAnimation()) {
+      const flareSpeed = getFlareSpeed();
+      flarePhase += flareSpeed * 0.1;
+      flareRotation += flareSpeed * 0.02;
+      //console.log("Flare Animation: Phase:", flarePhase, "Rotation:", flareRotation, "Speed:", flareSpeed);
+    }
 
-    return interpolateHexColors(startColor, endColor, interpolationVal);
+    const newSunRadius = getSunRadius();
+    if (newSunRadius !== currentSunRadius) {
+      //console.log("Anim: Sun radius changed from", currentSunRadius, "to", newSunRadius);
+      currentSunRadius = newSunRadius;
+      generatePlanets(planetCountCurrent);
+    }
+
+    if (getEnableSun()) {
+      context.save();
+      context.beginPath();
+      const sunColor = getSunColor();
+      context.fillStyle = sunColor;
+      context.globalAlpha = 1.0;
+      if (isNaN(canvas.width) || isNaN(canvas.height)) {
+        console.error("Invalid canvas dimensions:", canvas.width, canvas.height);
+        return;
+      }
+      context.arc(canvas.width / 2, canvas.height / 2, getSunRadius(), 0, Math.PI * 2);
+      context.fill();
+      context.restore();
+      //console.log("Anim: Sun drawn - Radius:", getSunRadius(), "Color:", sunColor);
+
+      context.save();
+      context.beginPath();
+      context.fillStyle = sunColor;
+      context.globalAlpha = getFlareGlow() * 0.1;
+      context.arc(canvas.width / 2, canvas.height / 2, getSunRadius() + 10, 0, Math.PI * 2);
+      context.fill();
+      context.restore();
+      //console.log("Anim: Halo drawn");
+
+      if (getEnableFlares()) {
+        //console.log("Anim: Drawing flares, count:", getFlareCount());
+        const flareCount = getFlareCount();
+        const flareLength = getFlareLength();
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const isFlareAnimated = getEnableSunAnimation();
+        context.save();
+        for (let i = 0; i < flareCount; i++) {
+          try {
+            if (i >= flares.length) {
+              console.warn("Anim: Flare index", i, "exceeds flares length", flares.length);
+              continue;
+            }
+            const baseAngle = (2 * Math.PI * i) / flareCount + (isFlareAnimated ? flareRotation : 0);
+            const phaseOffset = flares[i];
+            const lengthScale = isFlareAnimated ? 0.3 + 0.9 * (0.5 + 0.5 * Math.sin(flarePhase + phaseOffset)) : 0.3;
+            const alpha = isFlareAnimated ? 0.1 + 0.6 * (0.5 + 0.5 * Math.cos(flarePhase + phaseOffset)) : 0.1;
+            const jitter = (isFlareAnimated && getFlareSpeed() > 0) ? (Math.random() - 0.5) * 0.05 : 0;
+            const angle = baseAngle + jitter;
+            const startX = centerX + Math.cos(angle) * getSunRadius();
+            const startY = centerY + Math.sin(angle) * getSunRadius();
+            const endX = centerX + Math.cos(angle) * (getSunRadius() + flareLength * lengthScale);
+            const endY = centerY + Math.sin(angle) * (getSunRadius() + flareLength * lengthScale);
+            if (isNaN(startX) || isNaN(startY) || isNaN(endX) || isNaN(endY)) {
+              console.warn("Invalid flare coordinates:", { startX, startY, endX, endY });
+              continue;
+            }
+            //console.log("Anim: Flare", i, "start:", startX, startY, "end:", endX, endY, "alpha:", alpha, "animated:", isFlareAnimated);
+            const segments = 4;
+            for (let j = 0; j < segments; j++) {
+              const t = j / (segments - 1);
+              const segX = startX + (endX - startX) * t;
+              const segY = startY + (endY - startY) * t;
+              context.beginPath();
+              context.lineWidth = 4 * (1 - t) + 0.5 * t;
+              const mixedColor = mixColors(sunColor, "#FFFFFF", t * 0.7);
+              context.strokeStyle = mixedColor;
+              context.globalAlpha = alpha * (1 - t * 0.5);
+              const prevT = Math.max(t - 0.1, 0);
+              const prevX = startX + (endX - startX) * prevT;
+              const prevY = startY + (endY - startY) * prevT;
+              //console.log("Anim: Flare segment", j, "seg:", segX, segY, "prev:", prevX, prevY, "color:", mixedColor);
+              context.moveTo(prevX, prevY);
+              context.lineTo(segX, segY);
+              context.stroke();
+            }
+          } catch (e) {
+            console.error("Anim: Error drawing flare", i, ":", e);
+          }
+        }
+        context.restore();
+        //console.log("Anim: Flares drawn");
+      }
+    }
+
+    if (getEnablePlanets()) {
+      //console.log("Anim: Drawing planets, count:", planets.length);
+      const newPlanetCount = getPlanetCount();
+      if (newPlanetCount !== planetCountCurrent) {
+        //console.log("Anim: Regenerating planets, new count:", newPlanetCount);
+        generatePlanets(newPlanetCount);
+      }
+      planets.forEach((planet, index) => {
+        try {
+          if (!planet || typeof planet.rotate !== "function") {
+            console.warn("Anim: Invalid planet at index", index);
+            return;
+          }
+          planet.rotate();
+        } catch (e) {
+          console.error("Anim: Error rotating planet", index, ":", e);
+        }
+      });
+      //console.log("Anim: Planets drawn");
+    } else {
+      //console.log("Anim: Planets disabled");
+    }
+  } catch (e) {
+    console.error("Error in anim:", e);
   }
+}
 
-  // percentage of 0 => pure color1, percentage of 1 => pure color2
-  function interpolateHexColors(color1, color2, percentage) {
-
-    const r1 = parseInt(color1.substring(1, 3), 16);
-    const g1 = parseInt(color1.substring(3, 5), 16);
-    const b1 = parseInt(color1.substring(5, 7), 16);
-
-    const r2 = parseInt(color2.substring(1, 3), 16);
-    const g2 = parseInt(color2.substring(3, 5), 16);
-    const b2 = parseInt(color2.substring(5, 7), 16);
-
-    const r = Math.round(r1 + (r2 - r1) * percentage);
-    const g = Math.round(g1 + (g2 - g1) * percentage);
-    const b = Math.round(b1 + (b2 - b1) * percentage);
-
-    const hex = (c) => (c < 16 ? '0' : '') + c.toString(16);
-    const interpolatedColor = `#${hex(r)}${hex(g)}${hex(b)}`;
-
-    return interpolatedColor;
-  }
-  
-  function update() {
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
-
-    const elapsedTime = performance.now() - prevTime;
-    prevTime = performance.now();
-    rotation += (speed * elapsedTime / 500 * (reversed ? -1 : 1)) % DEGREES_IN_CIRCLE;
-
-    drawPinwheel();
-
-    window.requestAnimationFrame(update);
-  }
-
-  window.requestAnimationFrame(update);
+window.requestAnimationFrame(anim);
 </script>
