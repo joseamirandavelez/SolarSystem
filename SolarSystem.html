@@ -63,7 +63,7 @@ generatePlanets(planetCountCurrent); // Fix: Pass planetCountCurrent
 setSize();
 anim();
 
-// Returns the rotational speed multiplier for planets, normalized to 0.01–0.1 (default 0.02).
+// Returns the rotational speed multiplier for planets, normalized to 0.005–0.025 (default 0.02).
 function getSpeed() {
   const value = (typeof speed !== "undefined" && !isNaN(speed)) ? speed / 200 : 2 / 200;
   //console.log("Speed:", value);
